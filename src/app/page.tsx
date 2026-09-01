@@ -44,24 +44,28 @@ export default function Home() {
   const [sort, setSort] = useState<'date' | 'high' | 'low'>('date');
 
   useEffect(() => {
-    if (!supabase) return;
+    const client = supabase;
+    if (!client) return;
+
     let mounted = true;
     async function load() {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from('literal_trash_books')
         .select('id,title,author,description,cover_url,meeting_date,status,hook_avg,story_avg,rating_count')
         .order('meeting_date', { ascending: false, nullsFirst: true });
       if (!error && mounted && data?.length) setBooks(data as Book[]);
     }
+
     void load();
-    const channel = supabase
+    const channel = client
       .channel('literal-trash-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'literal_trash_books' }, () => void load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'literal_trash_scores' }, () => void load())
       .subscribe();
+
     return () => {
       mounted = false;
-      void supabase.removeChannel(channel);
+      void client.removeChannel(channel);
     };
   }, []);
 
