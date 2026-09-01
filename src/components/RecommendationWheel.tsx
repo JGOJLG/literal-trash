@@ -76,7 +76,7 @@ export default function RecommendationWheel(){
   const showRoundResult = Boolean(selected && !isAnimating && state.status!=='winner');
 
   return <section className="section" id="next-pick">
-    <div className="sectionHead"><div><div className="eyebrow">Next book chaos</div><h3>What should we read next?</h3><p className="muted">Submit books, then eliminate one title at a time until only the winner is left.</p></div><span className="pill"><Sparkles size={15}/> Live elimination wheel</span></div>
+    <div className="sectionHead"><div><div className="eyebrow">Next book chaos</div><h3>What should we read next?</h3></div><span className="pill"><Sparkles size={15}/> Live elimination wheel</span></div>
     <div className="glass recSubmit">
       <div><h4>Throw a book in the ring.</h4><p className="muted">Everyone can add a recommendation. When the host spins, everyone watching sees the same wheel move at the same time.</p></div>
       <div className="recFields"><input className="field" placeholder="Your name" value={name} onChange={e=>setName(e.target.value)}/><input className="field" placeholder="Book title" value={title} onChange={e=>setTitle(e.target.value)}/><input className="field" placeholder="Author (optional)" value={author} onChange={e=>setAuthor(e.target.value)}/><button className="btn" onClick={()=>void submit()}>Add to the wheel</button>{message?<p className="muted recMessage">{message}</p>:null}</div>
