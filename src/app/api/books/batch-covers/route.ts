@@ -21,21 +21,14 @@ async function googleCandidates(title: string, author: string) {
   url.searchParams.set('q', `intitle:${title} inauthor:${author}`);
   url.searchParams.set('maxResults', '10');
   url.searchParams.set('printType', 'books');
-  const res = await fetch(url, { cache: 'no-store' });
+  const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(4000) });
   if (!res.ok) return [];
   const data = await res.json();
   return (data.items ?? []).map((x: any) => {
     const v = x.volumeInfo ?? {};
     const isbn = v.industryIdentifiers?.find((i: any) => i.type === 'ISBN_13')?.identifier ?? v.industryIdentifiers?.find((i: any) => i.type === 'ISBN_10')?.identifier ?? null;
     const image = v.imageLinks?.extraLarge || v.imageLinks?.large || v.imageLinks?.medium || v.imageLinks?.small || v.imageLinks?.thumbnail || null;
-    return {
-      source_id: x.id,
-      title: v.title ?? null,
-      authors: v.authors ?? [],
-      cover_url: image ? String(image).replace(/^http:/, 'https:').replace('&edge=curl', '') : null,
-      isbn,
-      source: 'google' as const,
-    };
+    return { source_id:x.id,title:v.title??null,authors:v.authors??[],cover_url:image?String(image).replace(/^http:/,'https:').replace('&edge=curl',''):null,isbn,source:'google' as const };
   });
 }
 
@@ -45,7 +38,7 @@ async function openLibraryCandidate(title: string, author: string) {
   url.searchParams.set('author', author.split(' and ')[0]);
   url.searchParams.set('limit', '10');
   url.searchParams.set('fields', 'key,title,author_name,isbn,cover_i');
-  const res = await fetch(url, { cache: 'no-store' });
+  const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(4000) });
   if (!res.ok) return null;
   const data = await res.json();
   const wantedTitle = normalize(title);
@@ -55,20 +48,9 @@ async function openLibraryCandidate(title: string, author: string) {
   const doc = exact ?? titleOnly ?? docs[0];
   if (!doc) return null;
   const isbn = doc.isbn?.find((value: string) => String(value).length === 13) ?? doc.isbn?.[0] ?? null;
-  const coverUrl = doc.cover_i
-    ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`
-    : isbn
-      ? `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`
-      : null;
+  const coverUrl = doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg` : isbn ? `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg` : null;
   if (!coverUrl) return null;
-  return {
-    source_id: doc.key ?? null,
-    title: doc.title ?? title,
-    authors: doc.author_name ?? [],
-    cover_url: coverUrl,
-    isbn,
-    source: 'openlibrary' as const,
-  };
+  return { source_id:doc.key??null,title:doc.title??title,authors:doc.author_name??[],cover_url:coverUrl,isbn,source:'openlibrary' as const };
 }
 
 async function resolveBook(title: string, author: string) {
@@ -82,14 +64,13 @@ async function resolveBook(title: string, author: string) {
 }
 
 export async function GET() {
-  const results = [] as any[];
-  for (const [title, author] of books) {
+  const results = await Promise.all(books.map(async ([title, author]) => {
     try {
       const selected = await resolveBook(title, author);
-      results.push({ title, author, items: selected ? [selected] : [] });
+      return { title, author, items: selected ? [selected] : [] };
     } catch (error) {
-      results.push({ title, author, items: [], error: error instanceof Error ? error.message : 'Cover lookup failed' });
+      return { title, author, items: [], error: error instanceof Error ? error.message : 'Cover lookup failed' };
     }
-  }
+  }));
   return NextResponse.json({ results }, { headers: { 'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=604800' } });
 }
