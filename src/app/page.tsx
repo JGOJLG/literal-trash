@@ -44,7 +44,7 @@ export default function Home() {
   const [sort, setSort] = useState<'date' | 'high' | 'low'>('date');
 
   useEffect(() => {
-    const client = supabase;
+    const client = supabase!;
     if (!client) return;
 
     let mounted = true;
