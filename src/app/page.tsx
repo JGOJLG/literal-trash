@@ -17,6 +17,16 @@ type Book = {
   rating_count: number;
 };
 
+type CoverResult = {
+  title: string;
+  author: string;
+  items?: Array<{
+    title: string | null;
+    authors: string[];
+    cover_url: string | null;
+  }>;
+};
+
 const demo: Book[] = [
   {
     id: 'current-demo',
@@ -35,6 +45,42 @@ const demo: Book[] = [
   { id: '3', title: 'Past Read No. 3', author: 'Literal Trash archive', description: null, cover_url: null, meeting_date: '2026-05-10', status: 'past', hook_avg: 4.8, story_avg: 4.4, rating_count: 8 },
 ];
 
+function normalize(value: string | null | undefined) {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function coverKey(title: string, author: string) {
+  return `${normalize(title)}::${normalize(author)}`;
+}
+
+async function fetchCoverMap() {
+  const map = new Map<string, string>();
+  try {
+    const response = await fetch('/api/books/batch-covers', { cache: 'no-store' });
+    if (!response.ok) return map;
+    const payload = await response.json() as { results?: CoverResult[] };
+
+    for (const result of payload.results ?? []) {
+      const wantedTitle = normalize(result.title);
+      const wantedAuthor = normalize(result.author);
+      const withCover = (result.items ?? []).filter((item) => Boolean(item.cover_url));
+      const exact = withCover.find((item) =>
+        normalize(item.title) === wantedTitle &&
+        (item.authors ?? []).some((author) => normalize(author) === wantedAuthor),
+      );
+      const titleMatch = withCover.find((item) => normalize(item.title) === wantedTitle);
+      const candidate = exact ?? titleMatch ?? withCover[0];
+      if (candidate?.cover_url) map.set(coverKey(result.title, result.author), candidate.cover_url);
+    }
+  } catch {
+    return map;
+  }
+  return map;
+}
+
 export default function Home() {
   const [books, setBooks] = useState<Book[]>(demo);
   const [hook, setHook] = useState(4.0);
@@ -48,12 +94,28 @@ export default function Home() {
     if (!client) return;
 
     let mounted = true;
+    let coverPromise: Promise<Map<string, string>> | null = null;
+    const getCovers = () => {
+      coverPromise ??= fetchCoverMap();
+      return coverPromise;
+    };
+
     async function load() {
-      const { data, error } = await client
-        .from('literal_trash_books')
-        .select('id,title,author,description,cover_url,meeting_date,status,hook_avg,story_avg,rating_count')
-        .order('meeting_date', { ascending: false, nullsFirst: true });
-      if (!error && mounted && data?.length) setBooks(data as Book[]);
+      const [{ data, error }, covers] = await Promise.all([
+        client
+          .from('literal_trash_books')
+          .select('id,title,author,description,cover_url,meeting_date,status,hook_avg,story_avg,rating_count')
+          .order('meeting_date', { ascending: false, nullsFirst: true }),
+        getCovers(),
+      ]);
+
+      if (!error && mounted && data?.length) {
+        const enriched = (data as Book[]).map((book) => ({
+          ...book,
+          cover_url: book.cover_url || covers.get(coverKey(book.title, book.author)) || null,
+        }));
+        setBooks(enriched);
+      }
     }
 
     void load();
@@ -123,13 +185,13 @@ export default function Home() {
           </div>
 
           <div className="glass heroBook">
-            {current?.cover_url ? <img className="cover float" src={current.cover_url} alt={current.title} /> : <div className="cover float" style={{display:'grid',placeItems:'center',padding:24,textAlign:'center',fontWeight:900}}>BOOK COVER</div>}
+            {current?.cover_url ? <img className="cover float" src={current.cover_url} alt={`${current.title} book cover`} /> : <div className="cover float" style={{display:'grid',placeItems:'center',padding:24,textAlign:'center',fontWeight:900}}>BOOK COVER</div>}
             <div className="bookMeta">
               <div className="eyebrow">This month’s read</div>
               <h2>{current?.title}</h2>
               <p className="muted">{current?.author}</p>
               <p>{current?.description}</p>
-              {current?.meeting_date ? <p><CalendarDays size={15} style={{verticalAlign:'middle',marginRight:6}} /> {new Date(current.meeting_date + 'T12:00:00').toLocaleDateString()}</p> : null}
+              {current?.meeting_date ? <p><CalendarDays size={15} style={{verticalAlign:'middle',marginRight:6}} /> {new Date(current.meeting_date + 'T12:00:00').toLocaleDateString(undefined,{month:'long',year:'numeric'})}</p> : null}
               <div className="scores">
                 <div className="scoreCard"><span>Hook</span><strong>{Number(current?.hook_avg || 0).toFixed(1)}</strong></div>
                 <div className="scoreCard"><span>Story</span><strong>{Number(current?.story_avg || 0).toFixed(1)}</strong></div>
@@ -182,7 +244,7 @@ export default function Home() {
               const overallScore = (Number(book.hook_avg || 0) + Number(book.story_avg || 0)) / 2;
               return <article className="glass pastCard" key={book.id}>
                 <div className="pastTop">
-                  {book.cover_url ? <img src={book.cover_url} alt="" className="miniCover"/> : <div className="miniCover" style={{display:'grid',placeItems:'center',fontSize:11,fontWeight:900,textAlign:'center'}}>PAST READ</div>}
+                  {book.cover_url ? <img src={book.cover_url} alt={`${book.title} book cover`} className="miniCover"/> : <div className="miniCover" style={{display:'grid',placeItems:'center',fontSize:11,fontWeight:900,textAlign:'center'}}>PAST READ</div>}
                   <div>
                     <div className="eyebrow">{book.meeting_date ? new Date(book.meeting_date+'T12:00:00').toLocaleDateString(undefined,{month:'short',year:'numeric'}) : 'Past read'}</div>
                     <h4>{book.title}</h4>
