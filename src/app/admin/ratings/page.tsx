@@ -1,110 +1,17 @@
 'use client';
-
-import { useState } from 'react';
-import { supabase } from '../../../lib/supabase';
-
-type Rating = {
-  rating_id: string;
-  book_id: string;
-  book_title: string;
-  book_author: string;
-  display_name: string;
-  hook_score: number;
-  story_score: number;
-  overall_score: number;
-  created_at: string;
-};
-
-export default function AdminRatingsPage() {
-  const [password, setPassword] = useState('');
-  const [ratings, setRatings] = useState<Rating[]>([]);
-  const [unlocked, setUnlocked] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [deleting, setDeleting] = useState<string | null>(null);
-
-  async function loadRatings(e?: React.FormEvent) {
-    e?.preventDefault();
-    setLoading(true);
-    setError('');
-    const client = supabase;
-    if (!client) {
-      setError('Supabase is not configured.');
-      setLoading(false);
-      return;
-    }
-    const { data, error: rpcError } = await client.rpc('literal_trash_admin_list_ratings', { admin_password: password });
-    if (rpcError) {
-      setUnlocked(false);
-      setError('That password is not correct.');
-    } else {
-      setRatings((data || []) as Rating[]);
-      setUnlocked(true);
-    }
-    setLoading(false);
-  }
-
-  async function deleteRating(rating: Rating) {
-    if (!window.confirm(`Delete ${rating.display_name}'s rating for ${rating.book_title}?`)) return;
-    const client = supabase;
-    if (!client) return;
-    setDeleting(rating.rating_id);
-    setError('');
-    const { data, error: rpcError } = await client.rpc('literal_trash_admin_delete_rating', {
-      admin_password: password,
-      target_rating_id: rating.rating_id,
-    });
-    if (rpcError || !data) {
-      setError('Could not delete that rating. Please try again.');
-    } else {
-      setRatings((current) => current.filter((item) => item.rating_id !== rating.rating_id));
-    }
-    setDeleting(null);
-  }
-
-  return (
-    <main style={{ minHeight: '100vh', padding: '48px 20px', background: 'radial-gradient(circle at 15% 10%, #dff4ff 0, transparent 34%), radial-gradient(circle at 85% 18%, #e4e6ff 0, transparent 32%), linear-gradient(145deg, #f8fcff, #eef5ff 50%, #f8f6ff)' }}>
-      <div style={{ maxWidth: 1050, margin: '0 auto' }}>
-        <a href="/" style={{ color: '#193f78', textDecoration: 'none', fontWeight: 700 }}>← Back to Literal Trash</a>
-        <div style={{ marginTop: 22, padding: '32px', borderRadius: 30, background: 'rgba(255,255,255,.72)', border: '1px solid rgba(255,255,255,.9)', boxShadow: '0 24px 70px rgba(65,104,170,.14)', backdropFilter: 'blur(20px)' }}>
-          <div style={{ fontSize: 12, letterSpacing: 2.2, textTransform: 'uppercase', color: '#5576aa', fontWeight: 800 }}>Literal Trash Admin</div>
-          <h1 style={{ margin: '8px 0 8px', fontSize: 'clamp(36px,6vw,68px)', lineHeight: 1, color: '#102d59', fontFamily: 'Georgia, serif', fontWeight: 500 }}>Ratings</h1>
-          <p style={{ color: '#5d7091', marginTop: 0 }}>See exactly who rated each book, their Hook and Story scores, and remove a submission when needed.</p>
-
-          {!unlocked ? (
-            <form onSubmit={loadRatings} style={{ maxWidth: 430, marginTop: 28 }}>
-              <label style={{ display: 'block', color: '#24466f', fontWeight: 700, marginBottom: 8 }}>Admin password</label>
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus style={{ flex: '1 1 230px', padding: '14px 16px', borderRadius: 16, border: '1px solid #c9d9ee', background: 'rgba(255,255,255,.9)', fontSize: 16, outline: 'none' }} />
-                <button disabled={loading || !password} style={{ padding: '14px 22px', border: 0, borderRadius: 16, background: '#173f78', color: 'white', fontWeight: 800, cursor: 'pointer' }}>{loading ? 'Opening…' : 'Open ratings'}</button>
-              </div>
-            </form>
-          ) : (
-            <div style={{ marginTop: 28 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
-                <strong style={{ color: '#24466f' }}>{ratings.length} submitted rating{ratings.length === 1 ? '' : 's'}</strong>
-                <button onClick={() => { setUnlocked(false); setRatings([]); setPassword(''); }} style={{ border: '1px solid #cbd9ec', background: 'rgba(255,255,255,.75)', borderRadius: 14, padding: '9px 14px', color: '#24466f', cursor: 'pointer' }}>Lock admin</button>
-              </div>
-              {ratings.length === 0 ? <div style={{ padding: 24, borderRadius: 20, background: 'rgba(255,255,255,.65)', color: '#667a99' }}>No individual ratings have been submitted yet.</div> : (
-                <div style={{ display: 'grid', gap: 12 }}>
-                  {ratings.map((rating) => (
-                    <div key={rating.rating_id} style={{ display: 'grid', gridTemplateColumns: 'minmax(180px,1.5fr) minmax(170px,1.4fr) repeat(3,minmax(70px,.55fr)) auto', gap: 14, alignItems: 'center', padding: '18px 20px', borderRadius: 20, background: 'rgba(255,255,255,.74)', border: '1px solid rgba(188,211,239,.7)', boxShadow: '0 10px 28px rgba(67,103,155,.08)' }}>
-                      <div><div style={{ color: '#15365f', fontWeight: 850 }}>{rating.display_name}</div><div style={{ color: '#8492aa', fontSize: 12, marginTop: 4 }}>{new Date(rating.created_at).toLocaleString()}</div></div>
-                      <div><div style={{ color: '#284e7d', fontWeight: 750 }}>{rating.book_title}</div><div style={{ color: '#8292aa', fontSize: 13 }}>{rating.book_author}</div></div>
-                      <div><div style={{ color: '#8492aa', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Hook</div><strong style={{ color: '#15365f', fontSize: 20 }}>{Number(rating.hook_score).toFixed(1)}</strong></div>
-                      <div><div style={{ color: '#8492aa', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Story</div><strong style={{ color: '#15365f', fontSize: 20 }}>{Number(rating.story_score).toFixed(1)}</strong></div>
-                      <div><div style={{ color: '#8492aa', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Overall</div><strong style={{ color: '#15365f', fontSize: 20 }}>{Number(rating.overall_score).toFixed(1)}</strong></div>
-                      <button onClick={() => deleteRating(rating)} disabled={deleting === rating.rating_id} style={{ border: '1px solid #e8c9d2', background: '#fff7fa', color: '#9a3152', borderRadius: 14, padding: '10px 13px', fontWeight: 800, cursor: 'pointer' }}>{deleting === rating.rating_id ? 'Deleting…' : 'Delete'}</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          {error && <div style={{ marginTop: 16, color: '#a12f50', fontWeight: 700 }}>{error}</div>}
-        </div>
-      </div>
-      <style jsx>{`@media (max-width: 800px){div[style*="grid-template-columns: minmax(180px"]{grid-template-columns:1fr 1fr !important;} div[style*="grid-template-columns: minmax(180px"] > div:nth-child(1), div[style*="grid-template-columns: minmax(180px"] > div:nth-child(2){grid-column:1/-1;}}`}</style>
-    </main>
-  );
-}
+import{useState}from'react';import{supabase}from'../../../lib/supabase';
+type Rating={rating_id:string;book_title:string;book_author:string;display_name:string;hook_score:number;story_score:number;overall_score:number;created_at:string};type Post={post_id:string;book_title:string;display_name:string;post_type:string;title:string;body:string;created_at:string};type Book={id:string;title:string;author:string;meeting_date:string|null;status:string};
+const box={padding:18,borderRadius:18,background:'rgba(255,255,255,.72)',border:'1px solid #dce8f7'} as const;const field={padding:'12px 14px',borderRadius:13,border:'1px solid #c9d9ee',fontSize:15,width:'100%'} as const;const btn={padding:'11px 15px',border:0,borderRadius:13,background:'#173f78',color:'white',fontWeight:800,cursor:'pointer'} as const;
+export default function Admin(){const[password,setPassword]=useState(''),[unlocked,setUnlocked]=useState(false),[tab,setTab]=useState<'ratings'|'board'|'books'>('ratings'),[ratings,setRatings]=useState<Rating[]>([]),[posts,setPosts]=useState<Post[]>([]),[books,setBooks]=useState<Book[]>([]),[error,setError]=useState(''),[newTitle,setNewTitle]=useState(''),[newAuthor,setNewAuthor]=useState(''),[newDate,setNewDate]=useState(''),[newStatus,setNewStatus]=useState('upcoming');
+async function load(){if(!supabase)return;setError('');const[{data:r,error:e},{data:p},{data:b}]=await Promise.all([supabase.rpc('literal_trash_admin_list_ratings',{admin_password:password}),supabase.rpc('literal_trash_admin_list_board',{admin_password:password}),supabase.rpc('literal_trash_admin_list_books',{admin_password:password})]);if(e){setError('That password is not correct.');setUnlocked(false);return}setRatings((r||[])as Rating[]);setPosts((p||[])as Post[]);setBooks((b||[])as Book[]);setUnlocked(true)}
+async function deleteRating(id:string){if(!supabase||!confirm('Delete this rating?'))return;await supabase.rpc('literal_trash_admin_delete_rating',{admin_password:password,target_rating_id:id});void load()}
+async function deletePost(id:string){if(!supabase||!confirm('Delete this board post?'))return;await supabase.rpc('literal_trash_admin_delete_board_post',{admin_password:password,target_post_id:id});void load()}
+async function editPost(p:Post){if(!supabase)return;const title=prompt('Edit title',p.title);if(title===null)return;const body=prompt('Edit post',p.body);if(body===null)return;await supabase.rpc('literal_trash_admin_update_board_post',{admin_password:password,target_post_id:p.post_id,new_type:p.post_type,new_title:title,new_body:body});void load()}
+async function addBook(){if(!supabase||!newTitle.trim()||!newAuthor.trim())return;const{error:e}=await supabase.rpc('literal_trash_admin_save_book',{admin_password:password,target_book_id:null,new_title:newTitle,new_author:newAuthor,new_meeting_date:newDate||null,new_status:newStatus});if(e){setError(e.message);return}setNewTitle('');setNewAuthor('');setNewDate('');void load()}
+async function changeStatus(b:Book,status:string){if(!supabase)return;const{error:e}=await supabase.rpc('literal_trash_admin_save_book',{admin_password:password,target_book_id:b.id,new_title:b.title,new_author:b.author,new_meeting_date:b.meeting_date,new_status:status});if(e)setError(e.message);else void load()}
+async function deleteBook(b:Book){if(!supabase||!confirm(`Delete ${b.title}? This also deletes its scores and archived board.`))return;await supabase.rpc('literal_trash_admin_delete_book',{admin_password:password,target_book_id:b.id});void load()}
+return <main style={{minHeight:'100vh',padding:'40px 20px',background:'linear-gradient(145deg,#f8fcff,#e8f2ff)'}}><div style={{maxWidth:1100,margin:'auto'}}><a href="/" style={{color:'#193f78',fontWeight:800,textDecoration:'none'}}>← Back to Literal Trash</a><div style={{...box,marginTop:20,padding:30}}><div style={{fontSize:12,letterSpacing:2,textTransform:'uppercase',fontWeight:900,color:'#5576aa'}}>Literal Trash Admin</div><h1 style={{fontFamily:'Georgia,serif',fontSize:52,color:'#102d59',margin:'8px 0'}}>Club Control Room</h1>{!unlocked?<form onSubmit={e=>{e.preventDefault();void load()}} style={{maxWidth:430,display:'flex',gap:9}}><input style={field} type="password" placeholder="Admin password" value={password} onChange={e=>setPassword(e.target.value)}/><button style={btn}>Log in</button></form>:<><div style={{display:'flex',gap:8,flexWrap:'wrap',margin:'20px 0'}}>{(['ratings','board','books']as const).map(t=><button key={t} style={{...btn,background:tab===t?'#173f78':'#dceaff',color:tab===t?'white':'#173f78'}} onClick={()=>setTab(t)}>{t==='ratings'?'Scores':t==='board'?'Discussion Board':'Books & Archive'}</button>)}</div>
+{tab==='ratings'&&<div style={{display:'grid',gap:10}}>{ratings.map(r=><div key={r.rating_id} style={{...box,display:'grid',gridTemplateColumns:'1.2fr 1.4fr repeat(3,.6fr) auto',gap:12,alignItems:'center'}}><strong>{r.display_name}</strong><span>{r.book_title}</span><span>Hook<br/><b>{Number(r.hook_score).toFixed(2)}</b></span><span>Story<br/><b>{Number(r.story_score).toFixed(2)}</b></span><span>Overall<br/><b>{Number(r.overall_score).toFixed(2)}</b></span><button style={{...btn,background:'#9a3152'}} onClick={()=>void deleteRating(r.rating_id)}>Delete</button></div>)}</div>}
+{tab==='board'&&<div style={{display:'grid',gap:10}}>{posts.map(p=><div key={p.post_id} style={box}><div style={{fontSize:12,color:'#6881a6',fontWeight:800}}>{p.book_title||'Unassigned'} · {p.post_type} · {p.display_name}</div><h3 style={{margin:'7px 0'}}>{p.title}</h3><p>{p.body}</p><div style={{display:'flex',gap:8}}><button style={btn} onClick={()=>void editPost(p)}>Edit</button><button style={{...btn,background:'#9a3152'}} onClick={()=>void deletePost(p.post_id)}>Delete</button></div></div>)}</div>}
+{tab==='books'&&<><div style={{...box,marginBottom:18}}><h3 style={{marginTop:0}}>Add a book</h3><div style={{display:'grid',gridTemplateColumns:'1.2fr 1fr .7fr .7fr auto',gap:8}}><input style={field} placeholder="Book title" value={newTitle} onChange={e=>setNewTitle(e.target.value)}/><input style={field} placeholder="Author" value={newAuthor} onChange={e=>setNewAuthor(e.target.value)}/><input style={field} type="date" value={newDate} onChange={e=>setNewDate(e.target.value)}/><select style={field} value={newStatus} onChange={e=>setNewStatus(e.target.value)}><option value="upcoming">Upcoming</option><option value="current">Current</option><option value="past">Past</option></select><button style={btn} onClick={()=>void addBook()}>Add</button></div></div><div style={{display:'grid',gap:9}}>{books.map(b=><div key={b.id} style={{...box,display:'flex',justifyContent:'space-between',alignItems:'center',gap:15,flexWrap:'wrap'}}><div><strong>{b.title}</strong><div style={{fontSize:13,color:'#6881a6'}}>{b.author} · {b.meeting_date||'No date'} · <b>{b.status}</b></div></div><div style={{display:'flex',gap:6,flexWrap:'wrap'}}><button style={btn} onClick={()=>void changeStatus(b,'current')}>Make Current</button><button style={{...btn,background:'#4f76aa'}} onClick={()=>void changeStatus(b,'upcoming')}>Upcoming</button><button style={{...btn,background:'#7890b2'}} onClick={()=>void changeStatus(b,'past')}>Archive</button><button style={{...btn,background:'#9a3152'}} onClick={()=>void deleteBook(b)}>Delete</button></div></div>)}</div></>}
+</>}{error&&<p style={{color:'#9a3152',fontWeight:800}}>{error}</p>}</div></div></main>}
