@@ -1,0 +1,208 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowUpRight, BookOpen, CalendarDays, Sparkles } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+
+type Book = {
+  id: string;
+  title: string;
+  author: string;
+  description: string | null;
+  cover_url: string | null;
+  meeting_date: string | null;
+  status: 'current' | 'past';
+  hook_avg: number;
+  story_avg: number;
+  rating_count: number;
+};
+
+const demo: Book[] = [
+  {
+    id: 'current-demo',
+    title: 'This Month’s Read',
+    author: 'Pick the next obsession',
+    description: 'Once the first book is selected, the real cover, author, summary, meeting date, and live community scores will appear here.',
+    cover_url: null,
+    meeting_date: null,
+    status: 'current',
+    hook_avg: 0,
+    story_avg: 0,
+    rating_count: 0,
+  },
+  { id: '1', title: 'Past Read No. 1', author: 'Literal Trash archive', description: null, cover_url: null, meeting_date: '2026-07-12', status: 'past', hook_avg: 4.5, story_avg: 3.8, rating_count: 7 },
+  { id: '2', title: 'Past Read No. 2', author: 'Literal Trash archive', description: null, cover_url: null, meeting_date: '2026-06-08', status: 'past', hook_avg: 3.9, story_avg: 4.7, rating_count: 6 },
+  { id: '3', title: 'Past Read No. 3', author: 'Literal Trash archive', description: null, cover_url: null, meeting_date: '2026-05-10', status: 'past', hook_avg: 4.8, story_avg: 4.4, rating_count: 8 },
+];
+
+export default function Home() {
+  const [books, setBooks] = useState<Book[]>(demo);
+  const [hook, setHook] = useState(4.0);
+  const [story, setStory] = useState(4.0);
+  const [name, setName] = useState('');
+  const [message, setMessage] = useState('');
+  const [sort, setSort] = useState<'date' | 'high' | 'low'>('date');
+
+  useEffect(() => {
+    if (!supabase) return;
+    let mounted = true;
+    async function load() {
+      const { data, error } = await supabase
+        .from('literal_trash_books')
+        .select('id,title,author,description,cover_url,meeting_date,status,hook_avg,story_avg,rating_count')
+        .order('meeting_date', { ascending: false, nullsFirst: true });
+      if (!error && mounted && data?.length) setBooks(data as Book[]);
+    }
+    void load();
+    const channel = supabase
+      .channel('literal-trash-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'literal_trash_books' }, () => void load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'literal_trash_scores' }, () => void load())
+      .subscribe();
+    return () => {
+      mounted = false;
+      void supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const current = books.find((b) => b.status === 'current') ?? books[0];
+  const past = useMemo(() => {
+    const rows = books.filter((b) => b.status === 'past');
+    return [...rows].sort((a, b) => {
+      if (sort === 'high') return ((b.hook_avg + b.story_avg) / 2) - ((a.hook_avg + a.story_avg) / 2);
+      if (sort === 'low') return ((a.hook_avg + a.story_avg) / 2) - ((b.hook_avg + b.story_avg) / 2);
+      return String(b.meeting_date ?? '').localeCompare(String(a.meeting_date ?? ''));
+    });
+  }, [books, sort]);
+
+  async function submitScore() {
+    setMessage('');
+    if (!current?.id) return;
+    if (!supabase) {
+      setMessage('Scoring UI is ready. Supabase environment variables still need to be attached to this new site.');
+      return;
+    }
+    const { error } = await supabase.from('literal_trash_scores').insert({
+      book_id: current.id,
+      display_name: name.trim() || 'Anonymous Reader',
+      hook_score: Math.round(hook * 10) / 10,
+      story_score: Math.round(story * 10) / 10,
+    });
+    setMessage(error ? error.message : 'Score submitted. The club board will update live.');
+  }
+
+  const overall = current ? (Number(current.hook_avg || 0) + Number(current.story_avg || 0)) / 2 : 0;
+
+  return (
+    <div className="shell">
+      <nav className="nav">
+        <div className="navin">
+          <div className="brand">Literal Trash <span>Book Club</span></div>
+          <div className="links">
+            <a className="pill" href="#current">Current Read</a>
+            <a className="pill" href="#score">Rate It</a>
+            <a className="pill" href="#archive">Past Reads</a>
+          </div>
+        </div>
+      </nav>
+
+      <main>
+        <section className="hero" id="current">
+          <div className="glass heroCopy">
+            <div className="eyebrow">A very serious website for unserious reading opinions</div>
+            <h1>Literal <em>Trash.</em></h1>
+            <p>One book a month. Two scores that matter. Hook Score tells us how impossible it was to put down. Story Score tells us whether the plot actually deserved the obsession.</p>
+            <div className="formRow" style={{ marginTop: 22 }}>
+              <a href="#score" className="btn">Drop your scores <ArrowUpRight size={16} /></a>
+              <a href="#archive" className="ghost">See the receipts</a>
+            </div>
+          </div>
+
+          <div className="glass heroBook">
+            {current?.cover_url ? <img className="cover float" src={current.cover_url} alt={current.title} /> : <div className="cover float" style={{display:'grid',placeItems:'center',padding:24,textAlign:'center',fontWeight:900}}>BOOK COVER</div>}
+            <div className="bookMeta">
+              <div className="eyebrow">This month’s read</div>
+              <h2>{current?.title}</h2>
+              <p className="muted">{current?.author}</p>
+              <p>{current?.description}</p>
+              {current?.meeting_date ? <p><CalendarDays size={15} style={{verticalAlign:'middle',marginRight:6}} /> {new Date(current.meeting_date + 'T12:00:00').toLocaleDateString()}</p> : null}
+              <div className="scores">
+                <div className="scoreCard"><span>Hook</span><strong>{Number(current?.hook_avg || 0).toFixed(1)}</strong></div>
+                <div className="scoreCard"><span>Story</span><strong>{Number(current?.story_avg || 0).toFixed(1)}</strong></div>
+                <div className="scoreCard"><span>Overall</span><strong>{overall.toFixed(1)}</strong></div>
+              </div>
+              <p className="muted" style={{fontSize:12,marginTop:10}}>{current?.rating_count || 0} ratings and counting</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="section" id="score">
+          <div className="sectionHead">
+            <div><div className="eyebrow">Live club scoring</div><h3>Rate the chaos.</h3></div>
+            <span className="pill"><Sparkles size={15} /> Live updating</span>
+          </div>
+          <div className="glass rateBox">
+            <div>
+              <div className="sliderWrap">
+                <label><span>Hook Score</span><strong>{hook.toFixed(1)}</strong></label>
+                <input type="range" min="0" max="5" step="0.1" value={hook} onChange={(e)=>setHook(Number(e.target.value))}/>
+              </div>
+              <p className="muted">How badly did this book have you cancelling plans?</p>
+            </div>
+            <div>
+              <div className="sliderWrap">
+                <label><span>Story Score</span><strong>{story.toFixed(1)}</strong></label>
+                <input type="range" min="0" max="5" step="0.1" value={story} onChange={(e)=>setStory(Number(e.target.value))}/>
+              </div>
+              <p className="muted">Was the story actually good, or were we just entertained?</p>
+            </div>
+            <div style={{gridColumn:'1/-1'}}>
+              <input className="field" placeholder="Your name or nickname" value={name} onChange={(e)=>setName(e.target.value)} />
+              <div className="formRow" style={{marginTop:12}}><button className="btn" onClick={()=>void submitScore()}>Submit my scores</button></div>
+              {message ? <p className="muted">{message}</p> : null}
+            </div>
+          </div>
+        </section>
+
+        <section className="section" id="archive">
+          <div className="sectionHead">
+            <div><div className="eyebrow">The evidence locker</div><h3>Past Reads</h3></div>
+            <div className="sorts">
+              <button className="pill" onClick={()=>setSort('date')}>Newest</button>
+              <button className="pill" onClick={()=>setSort('high')}>Highest rated</button>
+              <button className="pill" onClick={()=>setSort('low')}>Lowest rated</button>
+            </div>
+          </div>
+          <div className="grid">
+            {past.map((book) => {
+              const overallScore = (Number(book.hook_avg || 0) + Number(book.story_avg || 0)) / 2;
+              return <article className="glass pastCard" key={book.id}>
+                <div className="pastTop">
+                  {book.cover_url ? <img src={book.cover_url} alt="" className="miniCover"/> : <div className="miniCover" style={{display:'grid',placeItems:'center',fontSize:11,fontWeight:900,textAlign:'center'}}>PAST READ</div>}
+                  <div>
+                    <div className="eyebrow">{book.meeting_date ? new Date(book.meeting_date+'T12:00:00').toLocaleDateString(undefined,{month:'short',year:'numeric'}) : 'Past read'}</div>
+                    <h4>{book.title}</h4>
+                    <p className="muted">{book.author}</p>
+                  </div>
+                </div>
+                <div className="chips">
+                  <span className="chip">Hook {Number(book.hook_avg || 0).toFixed(1)}</span>
+                  <span className="chip">Story {Number(book.story_avg || 0).toFixed(1)}</span>
+                  <span className="chip">Overall {overallScore.toFixed(1)}</span>
+                </div>
+              </article>
+            })}
+          </div>
+        </section>
+
+        <section className="section">
+          <div className="glass" style={{padding:30,display:'flex',justifyContent:'space-between',gap:20,alignItems:'center',flexWrap:'wrap'}}>
+            <div><div className="eyebrow">Coming next</div><h3 style={{marginTop:6}}>Book search, archive pages, roulette, polls and more.</h3></div>
+            <BookOpen size={38}/>
+          </div>
+        </section>
+      </main>
+      <div className="footer">Literal Trash Book Club. Read it. Rate it. Argue about it.</div>
+    </div>
+  );
+}
