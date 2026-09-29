@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   url.searchParams.set('q', q);
   url.searchParams.set('maxResults', '12');
   url.searchParams.set('printType', 'books');
-  const res = await fetch(url, { next: { revalidate: 3600 } });
+  const res = await fetch(url, { headers: { 'User-Agent': 'LiteralTrashBookClub/1.0' }, next: { revalidate: 86400 } });
   if (!res.ok) return NextResponse.json({ items: [] }, { status: 502 });
   const data = await res.json();
   const items = (data.items ?? []).map((x: any) => {
