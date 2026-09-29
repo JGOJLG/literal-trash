@@ -26,3 +26,5 @@
 .scoreTrack i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#1c4f91,#7aa4e1)}
 .liveScoreEmpty{grid-column:1/-1;padding:35px;text-align:center}
 @media(max-width:700px){.liveResultsIntro{align-items:flex-start;flex-direction:column}.liveResultsCount{display:flex;align-items:baseline;gap:7px;min-width:0}.liveResultsCount strong{font-size:1.55rem}.liveResultsCount span{margin:0}.liveScoreGrid{grid-template-columns:1fr}.voterCard{padding:17px}.voterTop{grid-template-columns:42px 1fr auto}.voterAvatar{width:42px;height:42px;border-radius:14px}.voterName{font-size:1.12rem}.voterScores{gap:16px}}
+
+.nominationText{min-width:0;flex:1}.nominationRemove{margin-left:auto;width:30px;height:30px;flex:0 0 30px;border:0;border-radius:50%;background:rgba(18,59,114,.08);color:#526f98;font-size:1.2rem;line-height:1;cursor:pointer}.nominationRemove:hover{background:rgba(18,59,114,.15);color:#153866}.nominationRemove:disabled{opacity:.4;cursor:not-allowed}.publicSpinControls{grid-template-columns:1fr auto;align-items:center}.publicSpinControls .muted{grid-column:1/-1}.resetWheelBtn{white-space:nowrap}
