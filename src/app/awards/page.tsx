@@ -1,5 +1,5 @@
 'use client';
-import {useEffect,useMemo,useState} from 'react';
+import {useEffect,useState} from 'react';
 import Link from 'next/link';
 import {ArrowLeft,Check,Crown,Sparkles,Trophy,Users} from 'lucide-react';
 import {supabase} from '@/lib/supabase';
@@ -11,7 +11,7 @@ export default function Awards(){
  useEffect(()=>{void load();if(!supabase)return;const ch=supabase.channel('awards-live-room').on('postgres_changes',{event:'*',schema:'public',table:'literal_trash_award_votes'},()=>void load()).subscribe();return()=>{void supabase?.removeChannel(ch)}},[]);
  const cat=CATS[step],catVotes=votes.filter(v=>v.category===cat?.[0]),mySaved=cat?votes.find(v=>v.category===cat[0]&&v.member_id===memberId):undefined;
  useEffect(()=>{setChoice(mySaved?.book_id||'');setRevealed(Boolean(mySaved))},[step,memberId,mySaved?.book_id]);
- const results=useMemo(()=>books.map(b=>{const bv=catVotes.filter(v=>v.book_id===b.id);return{book:b,count:bv.length,voters:bv.map(v=>members.find(m=>m.id===v.member_id)?.name).filter(Boolean) as string[]}}).sort((a,b)=>b.count-a.count),[books,catVotes,members]);
+ const results=books.map(b=>{const bv=catVotes.filter(v=>v.book_id===b.id);const voters:string[]=[];bv.forEach(v=>{const m=members.find(x=>x.id===v.member_id);if(m)voters.push(m.name)});return{book:b,count:bv.length,voters}}).sort((a,b)=>b.count-a.count);
  async function submit(){if(!supabase||!memberId||!choice||!cat)return;setSaving(true);const existing=votes.find(v=>v.year===year&&v.category===cat[0]&&v.member_id===memberId);if(existing)await supabase.from('literal_trash_award_votes').update({book_id:choice,updated_at:new Date().toISOString()}).eq('id',existing.id);else await supabase.from('literal_trash_award_votes').insert({year,category:cat[0],member_id:memberId,book_id:choice});await load();setSaving(false);setRevealed(true)}
  function next(){if(step<CATS.length-1){setStep(s=>s+1);setChoice('');setRevealed(false);window.scrollTo({top:0,behavior:'smooth'})}} async function resetAwards(){if(!supabase)return;if(!window.confirm('Reset all 2026 Trashies votes and start over?'))return;setSaving(true);const{error}=await supabase.rpc('literal_trash_reset_awards',{p_year:year});if(!error){setVotes([]);setStep(0);setChoice('');setRevealed(false);window.scrollTo({top:0,behavior:'smooth'})}setSaving(false)}
  const done=step===CATS.length-1&&revealed,me=members.find(m=>m.id===memberId);
